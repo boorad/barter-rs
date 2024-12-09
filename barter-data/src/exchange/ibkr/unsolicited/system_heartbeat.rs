@@ -1,8 +1,6 @@
 use barter_integration::error::SocketError;
 use serde::{Deserialize, Serialize};
 
-use crate::exchange::ibkr::subscription::IbkrPlatformEvent;
-
 
 /// ### System Heartbeat
 /// ```json
@@ -19,9 +17,9 @@ pub struct IbkrSystemHeartbeat {
 }
 
 impl IbkrSystemHeartbeat {
-    pub fn validate(self) -> Result<IbkrPlatformEvent, SocketError> {
+    pub fn validate(self) -> Result<IbkrSystemHeartbeat, SocketError> {
         if self.hb > 0 {
-            Ok(IbkrPlatformEvent::SystemHeartbeat(self))
+            Ok(self)
         } else {
             Err(SocketError::Subscribe(format!(
                 "received failed system response success value"

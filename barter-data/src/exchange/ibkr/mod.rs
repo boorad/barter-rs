@@ -3,11 +3,7 @@ use self::{
     subscriber::IbkrWebSocketSubscriber, unsolicited::account_updates::IbkrAccountResponse,
 };
 use crate::{
-    exchange::{Connector, ExchangeId, ExchangeSub, PingInterval, StreamSelector},
-    instrument::InstrumentData,
-    subscription::{account::Accounts, book::OrderBooksL1, Map},
-    transformer::stateless::StatelessTransformer,
-    ExchangeWsStream, NoInitialSnapshots,
+    exchange::{Connector, ExchangeId, ExchangeSub, PingInterval, StreamSelector}, instrument::InstrumentData, subscriber::validator::WebSocketSubValidator, subscription::{account::Accounts, book::OrderBooksL1, Map}, transformer::stateless::StatelessTransformer, ExchangeWsStream, NoInitialSnapshots
 };
 use barter_integration::{
     error::SocketError,
@@ -24,12 +20,11 @@ use barter_integration::{
 use barter_macro::{DeExchange, SerExchange};
 use reqwest::{header::HeaderMap, Error, StatusCode};
 use serde::Deserialize;
+use subscription::IbkrSubResponse;
 use std::{borrow::Cow, time::Duration};
-use subscription::IbkrPlatformEvent;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use url::Url;
-use validator::IbkrWebSocketSubValidator;
 
 /// Defines the type that translates a Barter [`Subscription`](crate::subscription::Subscription)
 /// into an exchange [`Connector`] specific channel used for generating [`Connector::requests`].
@@ -47,6 +42,9 @@ pub mod subscriber;
 /// [`Validator`](barter_integration::Validator) for [`Ibkr`].
 pub mod subscription;
 
+/// Miscellaneous operations for [`Ibkr`].
+pub mod miscellaneous_operations;
+
 // /// Public trade types for [`Ibkr`].
 // pub mod trade;
 
@@ -54,7 +52,7 @@ pub mod unsolicited;
 
 /// Custom [`SubscriptionValidator`](crate::subscriber::validator::SubscriptionValidator)
 /// implementation for [`Ibkr`].
-pub mod validator;
+// pub mod validator;
 
 /// [`Ibkr`] server base url for websockets.
 ///
@@ -84,8 +82,8 @@ impl Connector for Ibkr {
     type Channel = IbkrChannel;
     type Market = IbkrMarket;
     type Subscriber = IbkrWebSocketSubscriber;
-    type SubValidator = IbkrWebSocketSubValidator;
-    type SubResponse = IbkrPlatformEvent;
+    type SubValidator = WebSocketSubValidator;
+    type SubResponse = IbkrSubResponse;
 
     fn url() -> Result<Url, SocketError> {
         Url::parse(BASE_URL_IBKR_WS).map_err(SocketError::UrlParse)
@@ -105,8 +103,8 @@ impl Connector for Ibkr {
             .collect::<Vec<WsMessage>>()
     }
 
-    fn expected_responses<InstrumentKey>(map: &Map<InstrumentKey>) -> usize {
-        map.0.len() + 3 // the count of subscriptions in the map + (system, status, account) messages
+    fn expected_responses<InstrumentKey>(_map: &Map<InstrumentKey>) -> usize {
+        1 //map.0.len() + 3 // the count of subscriptions in the map + (system, status, account) messages
     }
 }
 
@@ -179,17 +177,17 @@ impl IbkrRest {
             http_client: self.http_client,
             base_url: Cow::Borrowed(BASE_URL_IBKR_REST),
             strategy: PublicNoHeaders {},
-            parser: IbkrTickleParser,
+            parser: IbkrHttpTickleParser,
         };
 
-        let (response, _metric) = rest_client.execute(IbkrTickleRequest).await?;
+        let (response, _metric) = rest_client.execute(IbkrHttpTickleRequest).await?;
         Ok(response.session)
     }
 }
 
-struct IbkrTickleParser;
+struct IbkrHttpTickleParser;
 
-impl HttpParser for IbkrTickleParser {
+impl HttpParser for IbkrHttpTickleParser {
     type ApiError = serde_json::Value;
     type OutputError = barter_integration::error::SocketError;
 
@@ -207,10 +205,10 @@ impl HttpParser for IbkrTickleParser {
     }
 }
 
-struct IbkrTickleRequest;
+struct IbkrHttpTickleRequest;
 
-impl RestRequest for IbkrTickleRequest {
-    type Response = IbkrTickleResponse;
+impl RestRequest for IbkrHttpTickleRequest {
+    type Response = IbkrHttpTickleResponse;
     type QueryParams = ();
     type Body = ();
 
@@ -224,7 +222,7 @@ impl RestRequest for IbkrTickleRequest {
 }
 
 #[derive(Deserialize)]
-struct IbkrTickleResponse {
+struct IbkrHttpTickleResponse {
     session: String,
 }
 

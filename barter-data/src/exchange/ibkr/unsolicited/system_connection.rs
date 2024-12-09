@@ -1,8 +1,6 @@
 use barter_integration::error::SocketError;
 use serde::{Deserialize, Serialize};
 
-use crate::exchange::ibkr::subscription::IbkrPlatformEvent;
-
 
 
 /// ### System Response
@@ -26,11 +24,11 @@ pub struct IbkrSystemResponse {
 }
 
 impl IbkrSystemResponse {
-    pub fn validate(self) -> Result<IbkrPlatformEvent, SocketError> {
+    pub fn validate(self) -> Result<IbkrSystemResponse, SocketError> {
         // TODO: not sure if a zero-length string is indicator of error
         //       (i.e. not successful, because no username string)
         if self.username.clone().len() > 0 {
-            Ok(IbkrPlatformEvent::System(self))
+            Ok(self)
         } else {
             Err(SocketError::Subscribe(format!(
                 "received failed system response success value"
